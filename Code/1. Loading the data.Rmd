@@ -1,0 +1,65 @@
+---
+title: "1. Loading the data"
+author: "Boy Remmelzwaal"
+date: "7/1/2021"
+output: html_document
+---
+
+In this document, you can find how the data is loaded and imputed to fix the problem of zero values. 
+PMM single imputation is used to create a complete dataset. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Packages
+```{r}
+library(mice)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(purrr)
+library(mvtnorm)
+library(tidyr)
+library(tibble)
+
+```
+
+
+# Loading the data
+```{r}
+
+# Setting the seed used for imputations
+set.seed(444)
+
+# read in data
+data <- read_csv("diabetes.csv", 
+                 col_types = cols(Pregnancies = col_integer(), 
+                                  Glucose = col_integer(), 
+                                  BloodPressure = col_integer(), 
+                                  SkinThickness = col_integer(), 
+                                  Insulin = col_integer(), 
+                                  Age = col_integer(), 
+                                  Outcome = col_factor(levels = c("1", "0"))))
+
+# Make zero-values NA if not in the outcome variable
+data %<>% mutate_at(vars(2:8), na_if, y = 0)
+
+# Make the data complete using Predictive Mean Matching
+imp <- mice(data, m=1, maxit = 35, method = "pmm", print = FALSE)
+plot(imp)
+
+# complete dataset
+data <- complete(imp)
+```
+
+# Correlation of variables
+```{r}
+# Checking correlations of variables in dataset
+
+cor(select(data, Pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI, DiabetesPedigreeFunction, Age))
+
+# Y = BMI
+# Predictors = glucose, bloodpressure, skinthickness, insulin
+```

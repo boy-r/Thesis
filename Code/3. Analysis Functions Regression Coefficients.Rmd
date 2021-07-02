@@ -1,0 +1,484 @@
+---
+title: "3. Analysis"
+author: "Boy Remmelzwaal"
+date: "7/1/2021"
+output: html_document
+---
+
+In this document you can find the script used to calculate the RMSE of the imputations. You can also find the script used to calculat the raw bias, coverage rate, confidence interval of the regression coefficients. Finally this script covers the code used to calculate the reverse model bias.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r}
+library(mice)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(purrr)
+library(mvtnorm)
+library(tidyr)
+library(tibble)
+
+```
+
+
+# True data
+```{r}
+
+# Fitting the model to the data, selectin coefficeints
+truemodel <- data %$% 
+  lm(BMI ~ Glucose + BloodPressure + SkinThickness + Insulin) %>% 
+  coef()
+
+# Reverse model bias - Fitting the predictors as the outcome variable 
+truedata.fit.x1y <- lm(Glucose ~ BMI + BloodPressure + SkinThickness + Insulin, data = data)$coefficients
+truedata.fit.x2y <- lm(BloodPressure ~ Glucose + BMI + SkinThickness + Insulin, data = data)$coefficients
+truedata.fit.x3y <- lm(SkinThickness ~ Glucose + BloodPressure + BMI + Insulin, data = data)$coefficients
+truedata.fit.x4y <- lm(Insulin ~ Glucose + BloodPressure + SkinThickness + BMI, data = data)$coefficients
+```
+
+
+# Function: grab results
+```{r}
+
+
+# Function for grabbing the results for multiple imputation methods
+grab.it <- function(x){
+  model <- x %>% 
+    map(~.x %>%
+        complete("all") %>%
+        map(~.x %$%
+              lm(BMI ~ Glucose + BloodPressure + SkinThickness + Insulin)) %>%
+        pool())
+  estim <- model %>%
+        map(~.x %>% summary() %>% .$estimate) %>%
+        do.call(rbind, args = .)
+  model %>%
+  map(~.x %>% .$pooled %>%
+        mutate(se = sqrt(diag(var(estim))),
+               lower = estimate - qt(.975, df) * se,
+               upper = estimate + qt(.975, df) * se,
+               bias = estimate - truemodel,
+               CIW = upper - lower,
+               coverage = lower <= truemodel & truemodel <= upper) %>% 
+              column_to_rownames(var = "term")) %>%
+    Reduce("+", .) / nsim
+}
+
+
+# Function for grabbing the results for single imputation methods
+grab.it.single <- function(x){
+  model <- x %>% 
+    map(~.x %>%
+          complete("all") %>%
+          map(~.x %$%  
+                lm(BMI ~ Glucose + BloodPressure + SkinThickness + Insulin)) %>% 
+          pool())
+  estim <- model %>% 
+    map(~.x %>% coefficients()) %>% 
+    do.call(rbind, args = .)
+  df <- model[[1]]$df.residual
+  model %>% map(~.x %>% summary() %>% .$coefficients %>% as.data.frame() %>% 
+        mutate(se = sqrt(diag(var(estim))),
+               lower = Estimate - qt(.975, df) * se,
+               upper = Estimate + qt(.975, df) * se,
+               bias = Estimate - truemodel,
+               CIW = upper - lower,
+               coverage = lower <= truemodel & truemodel <= upper)) %>% 
+    Reduce("+", .) / nsim
+}
+```
+
+
+## Function: reverse model regression coefficients (true values) - Bias.
+```{r}
+
+
+true.estimates.p <- function(x) {
+
+      fit <- lm(BMI ~ Glucose + BloodPressure + SkinThickness + Insulin, data = x)
+      summary <- summary(fit, conf.int = TRUE)
+
+      #betas
+      x1.beta <- fit$coefficients["Glucose"]
+      x2.beta <- fit$coefficients["BloodPressure"]
+      x3.beta <- fit$coefficients["SkinThickness"]
+      x4.beta <- fit$coefficients["Insulin"]
+
+      
+      #standard errors
+      x1.beta.se <- summary$coefficients["Glucose", "Std. Error"]
+      x2.beta.se <- summary$coefficients["BloodPressure", "Std. Error"]
+      x3.beta.se <- summary$coefficients["SkinThickness", "Std. Error"]
+      x4.beta.se <- summary$coefficients["Insulin", "Std. Error"]
+
+      #CI low 
+      x1.beta.CI.low <-  confint(fit)[2,1]
+      x2.beta.CI.low  <- confint(fit)[3,1]
+      x3.beta.CI.low  <- confint(fit)[4,1]
+      x4.beta.CI.low  <- confint(fit)[5,1]
+      
+      #CI high
+      x1.beta.CI.high <-  confint(fit)[2,2]
+      x2.beta.CI.high  <- confint(fit)[3,2]
+      x3.beta.CI.high  <- confint(fit)[4,2]
+      x4.beta.CI.high  <- confint(fit)[5,2]
+      
+      # AW
+      x1.beta.aw <- x1.beta.CI.high - x1.beta.CI.low
+      x2.beta.aw <- x2.beta.CI.high - x2.beta.CI.low
+      x3.beta.aw <- x3.beta.CI.high - x3.beta.CI.low
+      x4.beta.aw <- x4.beta.CI.high - x4.beta.CI.low
+      
+      #bias
+      x1.beta.bias <- 0
+      x2.beta.bias <- 0
+      x3.beta.bias <- 0
+      x4.beta.bias <- 0
+      
+      #coverage 
+      x1.beta.coverage <- FALSE
+      x2.beta.coverage <- FALSE
+      x3.beta.coverage <- FALSE
+      x4.beta.coverage <- FALSE
+       
+      r.squared <- summary$r.squared
+      
+      #reversed models
+      fit.x1y <- lm(Glucose ~ BMI + BloodPressure + SkinThickness + Insulin, data = x)
+      fit.x2y <- lm(BloodPressure ~ Glucose + BMI + SkinThickness + Insulin, data = x)
+      fit.x3y <- lm(SkinThickness ~ Glucose + BloodPressure + BMI + Insulin, data = x)
+      fit.x4y <- lm(Insulin ~ Glucose + BloodPressure + SkinThickness + BMI, data = x)
+   
+      #summaries
+      summary.x1y <- summ(fit.x1y, confint = TRUE)
+      summary.x2y <- summ(fit.x2y, confint = TRUE)
+      summary.x3y <- summ(fit.x3y, confint = TRUE)
+      summary.x4y <- summ(fit.x4y, confint = TRUE)
+
+      #betas
+      x1y.beta <- fit.x1y$coefficients["BMI"]
+      x2y.beta <- fit.x2y$coefficients["BMI"]
+      x3y.beta <- fit.x3y$coefficients["BMI"]
+      x4y.beta <- fit.x4y$coefficients["BMI"]
+      
+      #standard errors
+      x1y.beta.se <- summary(fit.x1y)$coefficients[2,2]
+      x2y.beta.se <- summary(fit.x2y)$coefficients[3,2]
+      x3y.beta.se <- summary(fit.x3y)$coefficients[4,2]
+      x4y.beta.se <- summary(fit.x4y)$coefficients[5,2]
+   
+      #CI low 
+      x1y.beta.CI.low <- summary.x1y$coeftable[2,2]
+      x2y.beta.CI.low  <- summary.x2y$coeftable[3,2]
+      x3y.beta.CI.low  <- summary.x3y$coeftable[4,2]
+      x4y.beta.CI.low  <- summary.x4y$coeftable[5,2]
+      
+      #CI high
+      x1y.beta.CI.high <- summary.x1y$coeftable[2,3]
+      x2y.beta.CI.high  <- summary.x2y$coeftable[3,3]
+      x3y.beta.CI.high  <- summary.x3y$coeftable[4,3]
+      x4y.beta.CI.high  <- summary.x4y$coeftable[5,3]
+      
+      # AW
+      x1y.beta.aw <- x1y.beta.CI.high - x1y.beta.CI.low
+      x2y.beta.aw <- x2y.beta.CI.high - x2y.beta.CI.low
+      x3y.beta.aw <- x3y.beta.CI.high - x3y.beta.CI.low
+      x4y.beta.aw <- x4y.beta.CI.high - x4y.beta.CI.low
+  
+      #bias
+      x1y.beta.bias <- 0
+      x2y.beta.bias <- 0
+      x3y.beta.bias <- 0
+      x4y.beta.bias <- 0
+        
+      #coverage 
+      x1y.beta.coverage <- FALSE
+      x2y.beta.coverage <- FALSE
+      x3y.beta.coverage <- FALSE
+      x4y.beta.coverage <- FALSE
+      
+
+  return(c(x1.beta, x1.beta.se, x1.beta.bias, x1.beta.aw, x1.beta.coverage, r.squared,
+           x2.beta, x2.beta.se, x2.beta.bias, x2.beta.aw, x2.beta.coverage,
+           x3.beta, x3.beta.se, x3.beta.bias, x3.beta.aw, x3.beta.coverage,
+           x4.beta, x4.beta.se, x4.beta.bias, x4.beta.aw, x4.beta.coverage,
+           x1y.beta, x1y.beta.se, x1y.beta.bias, x1y.beta.aw, x1y.beta.coverage,
+           x2y.beta, x2y.beta.se, x2y.beta.bias, x2y.beta.aw, x2y.beta.coverage, 
+           x3y.beta, x3y.beta.se, x3y.beta.bias, x3y.beta.aw, x3y.beta.coverage, 
+           x4y.beta, x4y.beta.se, x4y.beta.bias, x4y.beta.aw, x4y.beta.coverage))
+}
+
+
+```
+
+## Function: reverse model regression coefficients (imputations) - Bias.
+```{r}
+
+
+statistics.p <- function(x) {
+   
+   m <- x$m # Amount of imputations
+   
+   #  Get the truedata from the global environment
+   truedata.fit <- get("truemodel", envir = .GlobalEnv)
+   truedata.x1y <- get("truedata.fit.x1y", envir = .GlobalEnv)
+   truedata.x2y <- get("truedata.fit.x2y", envir = .GlobalEnv)
+   truedata.x3y <- get("truedata.fit.x3y", envir = .GlobalEnv)
+   truedata.x4y <- get("truedata.fit.x4y", envir = .GlobalEnv)
+   
+   # multiple imputation analysis
+   if (m > 1) {
+      
+      fit <- with(x, lm(BMI ~ Glucose + BloodPressure + SkinThickness + Insulin))
+      est <- pool(fit)
+      summary <- summary(est, conf.int = TRUE)
+
+      
+      # Betas
+      x1.beta <- summary$estimate[2] # Glucose
+      x2.beta <- summary$estimate[3] # BloodPressure
+      x3.beta <- summary$estimate[4] # SkinThickness
+      x4.beta <- summary$estimate[5] # Insulin
+      
+      # SE
+      x1.beta.se <- summary$std.error[2]
+      x2.beta.se <- summary$std.error[3]
+      x3.beta.se <- summary$std.error[4]
+      x4.beta.se <- summary$std.error[5]
+              
+      # Confidence interval low
+      x1.beta.CI.low <- summary  %>% filter(term == "Glucose") %>% select(c(`2.5 %`)) %>% unlist()
+      x2.beta.CI.low <- summary  %>% filter(term == "BloodPressure") %>% select(c(`2.5 %`)) %>% unlist()
+      x3.beta.CI.low <- summary  %>% filter(term == "SkinThickness") %>% select(c(`2.5 %`)) %>% unlist()
+      x4.beta.CI.low <- summary  %>% filter(term == "Insulin") %>% select(c(`2.5 %`)) %>% unlist()
+      
+      # Confidence interval high
+      x1.beta.CI.high <- summary %>% filter(term == "Glucose") %>% select(c(`97.5 %`)) %>% unlist()
+      x2.beta.CI.high <- summary %>% filter(term == "BloodPressure") %>% select(c(`97.5 %`)) %>% unlist()
+      x3.beta.CI.high <- summary %>% filter(term == "SkinThickness") %>% select(c(`97.5 %`)) %>% unlist()
+      x4.beta.CI.high <- summary %>% filter(term == "Insulin") %>% select(c(`97.5 %`)) %>% unlist()
+      
+      # Average width 
+      x1.beta.aw <- x1.beta.CI.high - x1.beta.CI.low
+      x2.beta.aw <- x2.beta.CI.high - x2.beta.CI.low
+      x3.beta.aw <- x3.beta.CI.high - x3.beta.CI.low
+      x4.beta.aw <- x4.beta.CI.high - x4.beta.CI.low
+  
+      # Raw bias
+      x1.beta.bias <- x1.beta - truedata.fit["Glucose"]
+      x2.beta.bias <- x2.beta - truedata.fit["BloodPressure"]
+      x3.beta.bias <- x3.beta - truedata.fit["SkinThickness"]
+      x4.beta.bias <- x4.beta - truedata.fit["Insulin"]
+                              
+      # Coverage rate
+      x1.beta.coverage <- x1.beta.CI.low < truedata.fit["Glucose"] & truedata.fit["Glucose"] < x1.beta.CI.high
+      x2.beta.coverage <- x2.beta.CI.low < truedata.fit["BloodPressure"] & truedata.fit["BloodPressure"] < x2.beta.CI.high
+      x3.beta.coverage <- x3.beta.CI.low < truedata.fit["SkinThickness"] & truedata.fit["SkinThickness"] < x3.beta.CI.high
+      x4.beta.coverage <- x4.beta.CI.low < truedata.fit["Insulin"] & truedata.fit["Insulin"] < x4.beta.CI.high
+   
+       # R2
+      r.squared <- pool.r.squared(est, adjusted = FALSE)[[1]]
+      
+      # Reversing the predictor, x as outcome
+      fit.x1y <- with(x, lm(Glucose ~ BMI + BloodPressure + SkinThickness + Insulin)) #Glucose as outcome
+      fit.x2y <- with(x, lm(BloodPressure ~ Glucose + BMI + SkinThickness + Insulin)) #Bloodpressure as outcome
+      fit.x3y <- with(x, lm(SkinThickness ~ Glucose + BloodPressure + BMI + Insulin)) #SkinThickness as outcome
+      fit.x4y <- with(x, lm(Insulin ~ Glucose + BloodPressure + SkinThickness + BMI)) #SkinThickness as outcome
+      
+      # Pooling the new models
+      est.x1y <- pool(fit.x1y)
+      est.x2y <- pool(fit.x2y)
+      est.x3y <- pool(fit.x3y)
+      est.x4y <- pool(fit.x4y)
+      
+      # Summaries of models
+      summary.x1y <- summary(est.x1y, conf.int = TRUE)
+      summary.x2y <- summary(est.x2y, conf.int = TRUE) 
+      summary.x3y <- summary(est.x3y, conf.int = TRUE)
+      summary.x4y <- summary(est.x4y, conf.int = TRUE) 
+   
+      # Betas of Y BMI as predictor in reversed models
+      x1y.beta <- est.x1y$pooled$estimate[2]
+      x2y.beta <- est.x2y$pooled$estimate[3]
+      x3y.beta <- est.x3y$pooled$estimate[4]
+      x4y.beta <- est.x4y$pooled$estimate[5]
+      
+      # SE
+      x1y.beta.se <- summary.x1y$std.error[2]
+      x2y.beta.se <- summary.x2y$std.error[3]
+      x3y.beta.se <- summary.x3y$std.error[4]
+      x4y.beta.se <- summary.x4y$std.error[5]
+      
+      # CI LOW
+      x1y.beta.CI.low <- summary.x1y  %>% filter(term == "BMI") %>% select(c(`2.5 %`)) %>% unlist()
+      x2y.beta.CI.low <- summary.x2y  %>% filter(term == "BMI") %>% select(c(`2.5 %`)) %>% unlist()
+      x3y.beta.CI.low <- summary.x3y  %>% filter(term == "BMI") %>% select(c(`2.5 %`)) %>% unlist()
+      x4y.beta.CI.low <- summary.x4y  %>% filter(term == "BMI") %>% select(c(`2.5 %`)) %>% unlist()
+      
+      # CI High
+      x1y.beta.CI.high <- summary.x1y  %>% filter(term == "BMI") %>% select(c(`97.5 %`)) %>% unlist()
+      x2y.beta.CI.high <- summary.x2y  %>% filter(term == "BMI") %>% select(c(`97.5 %`)) %>% unlist()
+      x3y.beta.CI.high <- summary.x3y  %>% filter(term == "BMI") %>% select(c(`97.5 %`)) %>% unlist()
+      x4y.beta.CI.high <- summary.x4y  %>% filter(term == "BMI") %>% select(c(`97.5 %`)) %>% unlist()
+    
+      # AW
+      x1y.beta.aw <- x1y.beta.CI.high - x1y.beta.CI.low
+      x2y.beta.aw <- x2y.beta.CI.high - x2y.beta.CI.low
+      x3y.beta.aw <- x3y.beta.CI.high - x3y.beta.CI.low
+      x4y.beta.aw <- x4y.beta.CI.high - x4y.beta.CI.low
+      
+      # BIAS
+      x1y.beta.bias <- x1y.beta - truedata.fit.x1y["BMI"]
+      x2y.beta.bias <- x2y.beta - truedata.fit.x2y["BMI"]
+      x3y.beta.bias <- x3y.beta - truedata.fit.x3y["BMI"]
+      x4y.beta.bias <- x4y.beta - truedata.fit.x4y["BMI"]
+      
+      
+      # Coverage rate
+      x1y.beta.coverage <- x1y.beta.CI.low < truedata.fit.x1y["BMI"] & truedata.fit.x1y["BMI"] < x1y.beta.CI.high
+      x2y.beta.coverage <- x2y.beta.CI.low < truedata.fit.x2y["BMI"] & truedata.fit.x2y["BMI"] < x2y.beta.CI.high
+      x3y.beta.coverage <- x3y.beta.CI.low < truedata.fit.x3y["BMI"] & truedata.fit.x3y["BMI"] < x3y.beta.CI.high
+      x4y.beta.coverage <- x4y.beta.CI.low < truedata.fit.x4y["BMI"] & truedata.fit.x4y["BMI"] < x4y.beta.CI.high
+   
+   }
+
+    # single imputation analysis
+   else {
+   
+      mids <- complete(x, action = "all") #mids
+      fit <- mids %>% map(~lm(BMI ~ Glucose + BloodPressure + SkinThickness + Insulin, data = .)) %>% .[[1]]
+      summary <- summ(fit, confint = TRUE)
+      
+      
+      #betas
+      x1.beta <- fit$coefficients["Glucose"]
+      x2.beta <- fit$coefficients["BloodPressure"]
+      x3.beta <- fit$coefficients["SkinThickness"]
+      x4.beta <- fit$coefficients["Insulin"]
+   
+      
+      #standard errors
+      x1.beta.se <- summary(fit)$coefficients[2,2]
+      x2.beta.se <- summary(fit)$coefficients[3,2]
+      x3.beta.se <- summary(fit)$coefficients[4,2]
+      x4.beta.se <- summary(fit)$coefficients[5,2]
+      
+      #CI low 
+      x1.beta.CI.low <- summary$coeftable[2,2]
+      x2.beta.CI.low  <- summary$coeftable[3,2]
+      x3.beta.CI.low  <- summary$coeftable[4,2]
+      x4.beta.CI.low  <- summary$coeftable[5,2]
+      
+      #CI high
+      x1.beta.CI.high <- summary$coeftable[2,3]
+      x2.beta.CI.high  <- summary$coeftable[3,3]
+      x3.beta.CI.high  <- summary$coeftable[4,3]
+      x4.beta.CI.high  <- summary$coeftable[5,3]
+  
+      #bias
+      x1.beta.bias <- x1.beta - truedata.fit["Glucose"]
+      x2.beta.bias <- x2.beta - truedata.fit["BloodPressure"]
+      x3.beta.bias <- x3.beta - truedata.fit["SkinThickness"]
+      x4.beta.bias <- x4.beta - truedata.fit["Insulin"]
+      
+      #Aw
+      x1.beta.aw <- x1.beta.CI.high - x1.beta.CI.low
+      x2.beta.aw <- x2.beta.CI.high - x2.beta.CI.low
+      x3.beta.aw <- x3.beta.CI.high - x3.beta.CI.low
+      x4.beta.aw <- x4.beta.CI.high - x4.beta.CI.low
+      
+      #coverage 
+      x1.beta.coverage <- x1.beta.CI.low < truedata.fit["Glucose"] & truedata.fit["Glucose"] < x1.beta.CI.high
+      x2.beta.coverage <- x2.beta.CI.low < truedata.fit["BloodPressure"] & truedata.fit["BloodPressure"] < x2.beta.CI.high
+      x3.beta.coverage <- x3.beta.CI.low < truedata.fit["SkinThickness"] & truedata.fit["SkinThickness"] < x3.beta.CI.high
+      x4.beta.coverage <- x4.beta.CI.low < truedata.fit["Insulin"] & truedata.fit["Insulin"] < x4.beta.CI.high
+       
+      r.squared <- summary(fit)$r.squared
+      
+      #reversed models
+      fit.x1y <- mids %>% map(~lm(Glucose ~ BMI + BloodPressure + SkinThickness + Insulin, data = .x)) %>% .[[1]]
+      fit.x2y <- mids %>% map(~lm(BloodPressure ~ Glucose + BMI + SkinThickness + Insulin, data = .x)) %>% .[[1]]
+      fit.x3y <- mids %>% map(~lm(SkinThickness ~ Glucose + BloodPressure + BMI + Insulin, data = .x)) %>% .[[1]]
+      fit.x4y <- mids %>% map(~lm(Insulin ~ Glucose + BloodPressure + SkinThickness + BMI, data = .x)) %>% .[[1]]
+      
+      #summaries
+      summary.x1y <- summ(fit.x1y, confint = TRUE)
+      summary.x2y <- summ(fit.x2y, confint = TRUE)
+      summary.x3y <- summ(fit.x3y, confint = TRUE)
+      summary.x4y <- summ(fit.x4y, confint = TRUE)
+
+      #betas
+      x1y.beta <- fit.x1y$coefficients["BMI"]
+      x2y.beta <- fit.x2y$coefficients["BMI"]
+      x3y.beta <- fit.x3y$coefficients["BMI"]
+      x4y.beta <- fit.x4y$coefficients["BMI"]
+      
+      #standard errors
+      x1y.beta.se <- summary(fit.x1y)$coefficients[2,2]
+      x2y.beta.se <- summary(fit.x2y)$coefficients[3,2]
+      x3y.beta.se <- summary(fit.x3y)$coefficients[4,2]
+      x4y.beta.se <- summary(fit.x4y)$coefficients[5,2]
+   
+      #CI low 
+      x1y.beta.CI.low <- summary.x1y$coeftable[2,2]
+      x2y.beta.CI.low  <- summary.x2y$coeftable[3,2]
+      x3y.beta.CI.low  <- summary.x3y$coeftable[4,2]
+      x4y.beta.CI.low  <- summary.x4y$coeftable[5,2]
+      
+      #CI high
+      x1y.beta.CI.high <- summary.x1y$coeftable[2,3]
+      x2y.beta.CI.high  <- summary.x2y$coeftable[3,3]
+      x3y.beta.CI.high  <- summary.x3y$coeftable[4,3]
+      x4y.beta.CI.high  <- summary.x4y$coeftable[5,3]
+  
+      #bias
+      x1y.beta.bias <- x1y.beta - truedata.fit.x1y["BMI"]
+      x2y.beta.bias <- x2y.beta - truedata.fit.x2y["BMI"]
+      x3y.beta.bias <- x3y.beta - truedata.fit.x3y["BMI"]
+      x4y.beta.bias <- x4y.beta - truedata.fit.x4y["BMI"]
+      
+      # aw
+      x1y.beta.aw <- x1y.beta.CI.high - x1y.beta.CI.low
+      x2y.beta.aw <- x2y.beta.CI.high - x2y.beta.CI.low
+      x3y.beta.aw <- x3y.beta.CI.high - x3y.beta.CI.low
+      x4y.beta.aw <- x4y.beta.CI.high - x4y.beta.CI.low
+      
+      #coverage 
+      x1y.beta.coverage <- x1y.beta.CI.low < truedata.fit.x1y["BMI"] & truedata.fit.x1y["BMI"] < x1y.beta.CI.high
+      x2y.beta.coverage <- x2y.beta.CI.low < truedata.fit.x2y["BMI"] & truedata.fit.x2y["BMI"] < x2y.beta.CI.high
+      x3y.beta.coverage <- x3y.beta.CI.low < truedata.fit.x3y["BMI"] & truedata.fit.x3y["BMI"] < x3y.beta.CI.high
+      x4y.beta.coverage <- x4y.beta.CI.low < truedata.fit.x4y["BMI"] & truedata.fit.x4y["BMI"] < x4y.beta.CI.high
+
+   }
+      
+    return(c(  x1.beta, x1.beta.se, x1.beta.bias, x1.beta.aw, x1.beta.coverage, r.squared,
+               x2.beta, x2.beta.se, x2.beta.bias, x2.beta.aw, x2.beta.coverage,
+               x3.beta, x3.beta.se, x3.beta.bias, x3.beta.aw, x3.beta.coverage,
+               x4.beta, x4.beta.se, x4.beta.bias, x4.beta.aw, x4.beta.coverage,
+               x1y.beta, x1y.beta.se, x1y.beta.bias, x1y.beta.aw, x1y.beta.coverage,
+               x2y.beta, x2y.beta.se, x2y.beta.bias, x2y.beta.aw, x2y.beta.coverage, 
+               x3y.beta, x3y.beta.se, x3y.beta.bias, x3y.beta.aw, x3y.beta.coverage, 
+               x4y.beta, x4y.beta.se, x4y.beta.bias, x4y.beta.aw, x4y.beta.coverage))
+} 
+
+format.p <- (c("x1.beta" = 0, "x1.beta.se" = 0, "x1.beta.bias" = 0, "x1.beta.aw" = 0, "x1.beta.coverage" = T, "r.squared" = 0,
+               "x2.beta" = 0, "x2.beta.se" = 0, "x2.beta.bias" = 0, "x2.beta.aw" = 0, "x2.beta.coverage" = T,
+               "x3.beta" = 0, "x3.beta.se" = 0, "x3.beta.bias" = 0, "x3.beta.aw" = 0, "x3.beta.coverage" = T,
+               "x4.beta" = 0, "x4.beta.se" = 0, "x4.beta.bias" = 0, "x4.beta.aw" = 0, "x4.beta.coverage" = T,
+          
+               "x1y.beta" = 0, "x1y.beta.se" = 0, "x1y.beta.bias" = 0, "x1y.beta.aw" = 0, "x1y.beta.coverage" = T,
+               "x2y.beta" = 0, "x2y.beta.se" = 0, "x2y.beta.bias" = 0, "x2y.beta.aw" = 0, "x2y.beta.coverage" = T, 
+               "x3y.beta" = 0, "x3y.beta.se" = 0, "x3y.beta.bias" = 0, "x3y.beta.aw" = 0, "x3y.beta.coverage" = T, 
+               "x4y.beta" = 0, "x4y.beta.se" = 0, "x4y.beta.bias" = 0, "x4y.beta.aw" = 0, "x4y.beta.coverage" = T))
+
+
+
+```
+
+
+
+

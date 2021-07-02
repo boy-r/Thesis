@@ -1,0 +1,163 @@
+---
+title: "2. Creating the simulations"
+author: "Boy Remmelzwaal"
+date: "7/1/2021"
+output: html_document
+---
+
+In this document you can find the script used to create the simulations.
+The RMSE is calculated for each individual simulation bootstrap sample and is therefore already included in the function. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r}
+library(mice)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(purrr)
+library(mvtnorm)
+library(tidyr)
+library(tibble)
+
+```
+
+
+
+# Function: RMSE
+```{r}
+
+rmse <- function(truedata, imp, variable) {
+  mx <- is.na(mice::complete(imp, 0))[, variable]
+  mse <- rep(NA, imp$m)
+  for (k in seq_len(imp$m)) {
+    filled <- mice::complete(imp, k)[mx, variable]
+    true <- truedata[mx, variable]
+    mse[k] <- mean((filled - true)^2)
+  }
+  sqrt(mean(mse))
+}
+
+# This function is written by van Buuren (2016). It may be found here: https://stefvanbuuren.name/fimd/sec-true.html
+```
+
+
+# Function: Creating simulations 
+```{r}
+set.seed(444)
+# Number of simulations
+nsim = 500
+
+# Defining 4 missingness patterns
+mypatterns <- rbind(c(1,0,0,1,1,1,1,1,1), #pattern1
+                    c(1,1,1,0,0,1,1,1,1), #pattern2
+                    c(1,1,1,1,0,0,1,1,1), #pattern3
+                    c(1,0,0,1,1,1,1,1,1)) #pattern4
+
+simulate <- function(complete.data, p){
+  
+  data <- complete.data
+  
+  #Bootstrapping the data
+  boot <- data[sample(1:nrow(data), nrow(data), replace = TRUE), ]
+
+  # Creating missingness
+  missing <- ampute(boot, prop = p, patterns = mypatterns,
+                    mech = "MCAR")$amp
+  
+  #imputation methods
+  imp.mean <- mice(missing, method = "mean", m = 1, maxit = 1, printFlag = FALSE)
+  imp.reg <- mice(missing, method = "norm.predict", m = 1, maxit = 1, printFlag = FALSE)
+  imp.stoch.m1 <- mice(missing, method = "norm.nob", m = 1, maxit = 7, printFlag = FALSE)
+  imp.stoch.m5 <- mice(missing, method = "norm.nob", m = 5, maxit = 7, printFlag = FALSE)
+  imp.bayes.m1 <- mice(missing, method = "norm", m = 1, maxit = 7, printFlag = FALSE)
+  imp.bayes.m5 <- mice(missing, method = "norm", m = 5, maxit = 7, printFlag = FALSE)
+  imp.pmm.m1 <- mice(missing, method = "pmm", m = 1, maxit = 7, printFlag = FALSE)
+  imp.pmm.m5 <- mice(missing, method = "pmm", m = 5, maxit = 7, printFlag = FALSE)
+
+  #RMSE y 
+   rmse.mean.y <- rmse(boot, imp.mean, "BMI")
+   rmse.reg.y <- rmse(boot, imp.reg, "BMI")
+   rmse.stochm1.y <- rmse(boot, imp.stoch.m1, "BMI")
+   rmse.stochm5.y <- rmse(boot, imp.stoch.m5, "BMI")
+   rmse.bayesm1.y <- rmse(boot, imp.bayes.m1, "BMI")
+   rmse.bayesm5.y <- rmse(boot, imp.bayes.m5, "BMI")
+   rmse.pmmm1.y <- rmse(boot, imp.pmm.m1, "BMI")
+   rmse.pmmm5.y <- rmse(boot, imp.pmm.m5, "BMI")
+  
+  #RMSE x1 
+   rmse.mean.x1 <- rmse(boot, imp.mean, "Glucose")
+   rmse.reg.x1 <- rmse(boot, imp.reg, "Glucose")
+   rmse.stochm1.x1 <- rmse(boot, imp.stoch.m1, "Glucose")
+   rmse.stochm5.x1 <- rmse(boot, imp.stoch.m5, "Glucose")
+   rmse.bayesm1.x1 <- rmse(boot, imp.bayes.m1, "Glucose")
+   rmse.bayesm5.x1 <- rmse(boot, imp.bayes.m5, "Glucose")
+   rmse.pmmm1.x1 <- rmse(boot, imp.pmm.m1, "Glucose")
+   rmse.pmmm5.x1 <- rmse(boot, imp.pmm.m5, "Glucose")
+   
+   #RMSE x2
+   rmse.mean.x2 <- rmse(boot, imp.mean, "BloodPressure")
+   rmse.reg.x2 <- rmse(boot, imp.reg, "BloodPressure")
+   rmse.stochm1.x2 <- rmse(boot, imp.stoch.m1, "BloodPressure")
+   rmse.stochm5.x2 <- rmse(boot, imp.stoch.m5, "BloodPressure")
+   rmse.bayesm1.x2 <- rmse(boot, imp.bayes.m1, "BloodPressure")
+   rmse.bayesm5.x2 <- rmse(boot, imp.bayes.m5, "BloodPressure")
+   rmse.pmmm1.x2 <- rmse(boot, imp.pmm.m1, "BloodPressure")
+   rmse.pmmm5.x2 <- rmse(boot, imp.pmm.m5, "BloodPressure")
+   
+   #RMSE x3
+   rmse.mean.x3 <- rmse(boot, imp.mean, "SkinThickness")
+   rmse.reg.x3 <- rmse(boot, imp.reg, "SkinThickness")
+   rmse.stochm1.x3 <- rmse(boot, imp.stoch.m1, "SkinThickness")
+   rmse.stochm5.x3 <- rmse(boot, imp.stoch.m5, "SkinThickness")
+   rmse.bayesm1.x3 <- rmse(boot, imp.bayes.m1, "SkinThickness")
+   rmse.bayesm5.x3 <- rmse(boot, imp.bayes.m5, "SkinThickness")
+   rmse.pmmm1.x3 <- rmse(boot, imp.pmm.m1, "SkinThickness")
+   rmse.pmmm5.x3 <- rmse(boot, imp.pmm.m5, "SkinThickness")
+   
+   #RMSE x4
+   rmse.mean.x4 <- rmse(boot, imp.mean, "Insulin")
+   rmse.reg.x4 <- rmse(boot, imp.reg, "Insulin")
+   rmse.stochm1.x4 <- rmse(boot, imp.stoch.m1, "Insulin")
+   rmse.stochm5.x4 <- rmse(boot, imp.stoch.m5, "Insulin")
+   rmse.bayesm1.x4 <- rmse(boot, imp.bayes.m1, "Insulin")
+   rmse.bayesm5.x4 <- rmse(boot, imp.bayes.m5, "Insulin")
+   rmse.pmmm1.x4 <- rmse(boot, imp.pmm.m1, "Insulin")
+   rmse.pmmm5.x4 <- rmse(boot, imp.pmm.m5, "Insulin")
+   
+ 
+  #Returning list with results
+  return(list(imp.mean = imp.mean,  imp.reg = imp.reg, imp.stoch.m1 = imp.stoch.m1,
+               imp.stoch.m5 = imp.stoch.m5, imp.bayes.m1 = imp.bayes.m1,
+               imp.bayes.m5 = imp.bayes.m5, imp.pmm.m1 = imp.pmm.m1,
+               imp.pmm.m5 = imp.pmm.m5, data = complete.data, boot = boot,
+              rmse.mean.y = rmse.mean.y, rmse.mean.x1 = rmse.mean.x1, rmse.mean.x2 = rmse.mean.x2, rmse.mean.x3 = rmse.mean.x3, rmse.mean.x4 = rmse.mean.x4,
+              rmse.reg.y = rmse.reg.y, rmse.reg.x1 = rmse.reg.x1, rmse.reg.x2 = rmse.reg.x2, rmse.reg.x3 = rmse.reg.x3, rmse.reg.x4 = rmse.reg.x4,
+              rmse.stochm1.y = rmse.stochm1.y, rmse.stochm1.x1 = rmse.stochm1.x1, rmse.stochm1.x2 = rmse.stochm1.x2, rmse.stochm1.x3 = rmse.stochm1.x3, rmse.stochm1.x4 = rmse.stochm1.x4,
+              rmse.stochm5.y = rmse.stochm5.y, rmse.stochm5.x1 = rmse.stochm5.x1, rmse.stochm5.x2 = rmse.stochm5.x2, rmse.stochm5.x3 = rmse.stochm5.x3, rmse.stochm5.x4 = rmse.stochm5.x4,
+              rmse.bayesm1.y = rmse.bayesm1.y, rmse.bayesm1.x1 = rmse.bayesm1.x1, rmse.bayesm1.x2 = rmse.bayesm1.x2, rmse.bayesm1.x3 = rmse.bayesm1.x3, rmse.bayesm1.x4 = rmse.bayesm1.x4,
+              rmse.bayesm5.y = rmse.bayesm5.y, rmse.bayesm5.x1 = rmse.bayesm5.x1, rmse.bayesm5.x2 = rmse.bayesm5.x2, rmse.bayesm5.x3 = rmse.bayesm5.x3, rmse.bayesm5.x4 = rmse.bayesm5.x4,
+              rmse.pmmm1.y = rmse.pmmm1.y, rmse.pmmm1.x1 = rmse.pmmm1.x1, rmse.pmmm1.x2 = rmse.pmmm1.x2, rmse.pmmm1.x3 = rmse.pmmm1.x3, rmse.pmmm1.x4 = rmse.pmmm1.x4,
+              rmse.pmmm5.y = rmse.pmmm5.y, rmse.pmmm5.x1 = rmse.pmmm5.x1, rmse.pmmm5.x2 = rmse.pmmm5.x2, rmse.pmmm5.x3 = rmse.pmmm5.x3, rmse.pmmm5.x4 = rmse.pmmm5.x4
+              )) 
+}
+  
+# Run simulation
+result.p50 <- replicate(nsim, simulate(data, 0.5), simplify = FALSE)
+result.p25 <- replicate(nsim, simulate(data, 0.25), simplify = FALSE)
+result.p10 <- replicate(nsim, simulate(data, 0.10), simplify = FALSE)
+
+```
+
+# Result: Visualising the missingness patterns for every missingness scenario
+```{r}
+md.pattern(result.p50[[1]][[1]][[1]])
+md.pattern(result.p25[[1]][[1]][[1]])
+md.pattern(result.p10[[1]][[1]][[1]])
+
+```
+
+

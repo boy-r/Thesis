@@ -1,0 +1,349 @@
+---
+title: "5. Results"
+author: "Boy Remmelzwaal"
+date: "7/1/2021"
+output: html_document
+---
+
+In this document you can find the code used for the results of the simulations.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r}
+library(mice)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(purrr)
+library(mvtnorm)
+library(tidyr)
+library(tibble)
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+
+```
+
+# Function: summarise RMSE
+```{r}
+
+grab.rmse <- function(x){
+   
+mean.y <-  x %>% map("rmse.mean.y") %>% as.data.frame() %>% t()
+mean.x1 <- x %>% map("rmse.mean.x1") %>% as.data.frame() %>% t()
+mean.x2 <- x %>% map("rmse.mean.x2") %>% as.data.frame() %>% t()
+mean.x3 <- x %>% map("rmse.mean.x3") %>% as.data.frame() %>% t()
+mean.x4 <- x %>% map("rmse.mean.x4") %>% as.data.frame() %>% t()
+results.mean <- data.frame(y = mean.y, x1 = mean.x1, x2 = mean.x2, x3 = mean.x3, x4 = mean.x4) %>% cbind(., method='mean')
+
+reg.y <-  x %>% map("rmse.reg.y") %>% as.data.frame() %>% t()
+reg.x1 <- x %>% map("rmse.reg.x1") %>% as.data.frame() %>% t()
+reg.x2 <- x %>% map("rmse.reg.x2") %>% as.data.frame() %>% t()
+reg.x3 <- x %>% map("rmse.reg.x3") %>% as.data.frame() %>% t()
+reg.x4 <- x %>% map("rmse.reg.x4") %>% as.data.frame() %>% t()
+results.reg <- data.frame(y = reg.y, x1 = reg.x1, x2 = reg.x2, x3 = reg.x3, x4 = reg.x4) %>% cbind(., method='reg')
+
+stochm1.y <-  x %>% map("rmse.stochm1.y") %>% as.data.frame() %>% t()
+stochm1.x1 <- x %>% map("rmse.stochm1.x1") %>% as.data.frame() %>% t()
+stochm1.x2 <- x %>% map("rmse.stochm1.x2") %>% as.data.frame() %>% t()
+stochm1.x3 <- x %>% map("rmse.stochm1.x3") %>% as.data.frame() %>% t()
+stochm1.x4 <- x %>% map("rmse.stochm1.x4") %>% as.data.frame() %>% t()
+results.stochm1 <- data.frame(y = stochm1.y, x1 = stochm1.x1, x2 = stochm1.x2, x3 = stochm1.x3, x4 = stochm1.x4) %>% cbind(., method='stochm1')
+
+stochm5.y <-  x %>% map("rmse.stochm5.y") %>% as.data.frame() %>% t()
+stochm5.x1 <- x %>% map("rmse.stochm5.x1") %>% as.data.frame() %>% t()
+stochm5.x2 <- x %>% map("rmse.stochm5.x2") %>% as.data.frame() %>% t()
+stochm5.x3 <- x %>% map("rmse.stochm5.x3") %>% as.data.frame() %>% t()
+stochm5.x4 <- x %>% map("rmse.stochm5.x4") %>% as.data.frame() %>% t()
+results.stochm5 <- data.frame(y = stochm5.y, x1 = stochm5.x1, x2 = stochm5.x2, x3 = stochm5.x3, x4 = stochm5.x4) %>% cbind(., method='stochm5')
+
+bayesm1.y <-  x %>% map("rmse.bayesm1.y") %>% as.data.frame() %>% t()
+bayesm1.x1 <- x %>% map("rmse.bayesm1.x1") %>% as.data.frame() %>% t()
+bayesm1.x2 <- x %>% map("rmse.bayesm1.x2") %>% as.data.frame() %>% t()
+bayesm1.x3 <- x %>% map("rmse.bayesm1.x3") %>% as.data.frame() %>% t()
+bayesm1.x4 <- x %>% map("rmse.bayesm1.x4") %>% as.data.frame() %>% t()
+results.bayesm1 <- data.frame(y = bayesm1.y, x1 = bayesm1.x1, x2 = bayesm1.x2, x3 = bayesm1.x3, x4 = bayesm1.x4) %>% cbind(., method='bayesm1')
+
+bayesm5.y <-  x %>% map("rmse.bayesm5.y") %>% as.data.frame() %>% t()
+bayesm5.x1 <- x %>% map("rmse.bayesm5.x1") %>% as.data.frame() %>% t()
+bayesm5.x2 <- x %>% map("rmse.bayesm5.x2") %>% as.data.frame() %>% t()
+bayesm5.x3 <- x %>% map("rmse.bayesm5.x3") %>% as.data.frame() %>% t()
+bayesm5.x4 <- x %>% map("rmse.bayesm5.x4") %>% as.data.frame() %>% t()
+results.bayesm5 <- data.frame(y = bayesm5.y, x1 = bayesm5.x1, x2 = bayesm5.x2, x3 = bayesm5.x3, x4 = bayesm5.x4) %>% cbind(., method='bayesm5')
+
+pmmm1.y <-  x %>% map("rmse.pmmm1.y") %>% as.data.frame() %>% t()
+pmmm1.x1 <- x %>% map("rmse.pmmm1.x1") %>% as.data.frame() %>% t()
+pmmm1.x2 <- x %>% map("rmse.pmmm1.x2") %>% as.data.frame() %>% t()
+pmmm1.x3 <- x %>% map("rmse.pmmm1.x3") %>% as.data.frame() %>% t()
+pmmm1.x4 <- x %>% map("rmse.pmmm1.x4") %>% as.data.frame() %>% t()
+results.pmmm1 <- data.frame(y = pmmm1.y, x1 = pmmm1.x1, x2 = pmmm1.x2, x3 = pmmm1.x3, x4 = pmmm1.x4) %>% cbind(., method='pmmm1')
+
+pmmm5.y <-  x %>% map("rmse.pmmm5.y") %>% as.data.frame() %>% t()
+pmmm5.x1 <- x %>% map("rmse.pmmm5.x1") %>% as.data.frame() %>% t()
+pmmm5.x2 <- x %>% map("rmse.pmmm5.x2") %>% as.data.frame() %>% t()
+pmmm5.x3 <- x %>% map("rmse.pmmm5.x3") %>% as.data.frame() %>% t()
+pmmm5.x4 <- x %>% map("rmse.pmmm5.x4") %>% as.data.frame() %>% t()
+results.pmmm5 <- data.frame(y = pmmm5.y, x1 = pmmm5.x1, x2 = pmmm5.x2, x3 = pmmm5.x3, x4 = pmmm5.x4) %>% cbind(., method='pmmm5')
+
+longformat_results <- rbind(results.mean, results.reg, results.stochm1, results.stochm5, results.bayesm1, results.bayesm5, results.pmmm1, results.pmmm5)
+
+  return(longformat_results)
+}
+
+#Grabbing the results for every missingness scenario
+rmse.10 <- grab.rmse(result.p10)
+rmse.25 <- grab.rmse(result.p25)
+rmse.50 <- grab.rmse(result.p50)
+
+
+```
+
+
+# Result: Average RMSE per method for 10% missingness scenario
+```{r}
+rmse.10 %>% split(.$method) %>% map(summary)
+
+```
+
+# Result: Average RMSE per method for 25% missingness scenario
+```{r}
+rmse.25 %>% split(.$method) %>% map(summary)
+```
+
+# Result: Average RMSE per method for 50% missingness scenario
+```{r}
+rmse.50 %>% split(.$method) %>% map(summary)
+```
+
+
+
+
+# Results: Regression coefficents 10% missingenss - Boostrap SE, bias, CIW and coverage rates.
+```{r, warning=FALSE}
+
+mean10 <- result.p10 %>% 
+  map("imp.mean") %>% 
+  grab.it.single() %>% round(4)
+mean10
+
+reg10 <- result.p10 %>% 
+  map("imp.reg") %>% 
+  grab.it.single()  %>% round(4)
+reg10
+
+stoch.m1.10 <- result.p10 %>% 
+  map("imp.stoch.m1") %>% 
+  grab.it.single()  %>% round(4)
+stoch.m1.10
+
+bayes.m1.10 <- result.p10 %>% 
+  map("imp.bayes.m1") %>% 
+  grab.it.single()  %>% round(4)
+bayes.m1.10
+
+pmm.m1.10 <- result.p10 %>% 
+  map("imp.pmm.m1") %>% 
+  grab.it.single()  %>% round(4)
+pmm.m1.10
+
+stoch.m5.10 <- result.p10 %>% 
+  map("imp.stoch.m5") %>% 
+  grab.it()  %>% round(4)
+stoch.m5.10
+
+bayes.m5.10 <- result.p10 %>% 
+  map("imp.bayes.m5") %>% 
+  grab.it()  %>% round(4)
+bayes.m5.10
+
+pmm.m5.10 <- result.p10 %>% 
+  map("imp.pmm.m5") %>% 
+  grab.it()  %>% round(4)
+pmm.m5.10
+```
+
+# Results: Regression coefficents 25% missingenss - Boostrap SE, bias, CIW and coverage rates.
+```{r, warning=FALSE}
+mean25 <- result.p25 %>% 
+  map("imp.mean") %>% 
+  grab.it.single() %>% round(4)
+mean25
+
+reg25 <- result.p25 %>% 
+  map("imp.reg") %>% 
+  grab.it.single() %>% round(4)
+reg25
+
+stoch.m1.25 <- result.p25 %>% 
+  map("imp.stoch.m1") %>% 
+  grab.it.single() %>% round(4)
+stoch.m1.25
+
+bayes.m1.25 <- result.p25 %>% 
+  map("imp.bayes.m1") %>% 
+  grab.it.single() %>% round(4)
+bayes.m1.25
+
+pmm.m1.25 <- result.p25 %>% 
+  map("imp.pmm.m1") %>% 
+  grab.it.single() %>% round(4)
+pmm.m1.25
+
+stoch.m5.25 <- result.p25 %>% 
+  map("imp.stoch.m5") %>% 
+  grab.it() %>% round(4)
+stoch.m5.25
+
+bayes.m5.25 <- result.p25 %>% 
+  map("imp.bayes.m5") %>% 
+  grab.it()  %>% round(4)
+bayes.m5.25
+
+pmm.m5.25 <- result.p25 %>% 
+  map("imp.pmm.m5") %>% 
+  grab.it()  %>% round(4)
+pmm.m5.25
+```
+
+# Results: Regression coefficents 50% missingenss - Boostrap SE, bias, CIW and coverage rates.
+```{r, warning=FALSE}
+
+mean50 <- result.p50 %>% 
+  map("imp.mean") %>% 
+  grab.it.single() %>% round(4)
+mean50
+
+reg50 <- result.p50 %>% 
+  map("imp.reg") %>% 
+  grab.it.single() %>% round(4)
+reg50
+
+stoch.m1.50 <- result.p50 %>% 
+  map("imp.stoch.m1") %>% 
+  grab.it.single() %>% round(4)
+stoch.m1.50
+
+bayes.m1.50 <- result.p50 %>% 
+  map("imp.bayes.m1") %>% 
+  grab.it.single() %>% round(4)
+
+pmm.m1.50 <- result.p50 %>% 
+  map("imp.pmm.m1") %>% 
+  grab.it.single() %>% round(4)
+pmm.m1.50
+
+stoch.m5.50 <- result.p50 %>% 
+  map("imp.stoch.m5") %>% 
+  grab.it() %>% round(4)
+stoch.m5.50
+
+bayes.m5.50 <- result.p50 %>% 
+  map("imp.bayes.m5") %>% 
+  grab.it() %>% round(4)
+bayes.m5.50
+
+pmm.m5.50 <- result.p50 %>% 
+  map("imp.pmm.m5") %>% 
+  grab.it() %>% round(4)
+pmm.m5.50
+```
+
+# Results: Summary of reverse model regression coefficients.
+```{r}
+
+statistics_summary_p <- function(x){
+
+# True data
+data <-  x %>% map("data") %>% vapply(., true.estimates.p, format.p) %>% t()
+data <- colMeans(data) 
+
+# imp mean
+mean <- x %>% map("imp.mean") %>% vapply(., statistics.p, format.p) %>% t()
+mean <- colMeans(mean)
+
+reg <- x %>% map("imp.reg") %>% vapply(., statistics.p, format.p) %>% t()
+reg <- colMeans(reg)
+  
+stoch.m1 <- x %>% map("imp.stoch.m1") %>% vapply(., statistics.p, format.p) %>% t()
+stoch.m1 <- colMeans(stoch.m1)
+
+stoch.m5 <- x %>% map("imp.stoch.m5") %>% vapply(., statistics.p, format.p) %>% t()
+stoch.m5 <- colMeans(stoch.m5)
+
+bayes.m1 <- x %>% map("imp.bayes.m1") %>% vapply(., statistics.p, format.p) %>% t()
+bayes.m1 <- colMeans(bayes.m1)
+
+bayes.m5 <- x %>% map("imp.bayes.m5") %>% vapply(., statistics.p, format.p) %>% t()
+bayes.m5 <- colMeans(bayes.m5)
+
+pmm.m1 <- x %>% map("imp.pmm.m1") %>% vapply(., statistics.p, format.p) %>% t()
+pmm.m1 <- colMeans(pmm.m1)
+
+pmm.m5 <- x %>% map("imp.pmm.m5") %>% vapply(., statistics.p, format.p) %>% t()
+pmm.m5 <- colMeans(pmm.m5)
+
+  return(rbind(data, mean, reg, stoch.m1, stoch.m5, bayes.m1, bayes.m5, pmm.m1, pmm.m5))
+}
+
+#50% missingness
+final_result_p50 <- statistics_summary_p(result.p50)
+
+#25% missingness
+final_result_p25 <- statistics_summary_p(result.p25) 
+
+#10% missingness
+final_result_p10 <- statistics_summary_p(result.p10) 
+
+
+
+```
+
+# Results: Descriptives - summary wide format
+```{r}
+
+statistics_summary_d <- function(x){
+  
+# True data
+data <- x %>% map("data") %>% vapply(., true.estimates.d, format.d) %>% t()
+data <- colMeans(data) 
+
+# imp mean
+mean <- x %>% map("imp.mean") %>% vapply(., statistics.d, format.d) %>% t()
+mean <- colMeans(mean)
+
+reg <- x %>% map("imp.reg") %>% vapply(., statistics.d, format.d) %>% t()
+reg <- colMeans(reg)
+  
+stoch.m1 <- x %>% map("imp.stoch.m1") %>% vapply(., statistics.d, format.d) %>% t()
+stoch.m1 <- colMeans(stoch.m1)
+
+stoch.m5 <- x %>% map("imp.stoch.m5") %>% vapply(., statistics.d, format.d) %>% t()
+stoch.m5 <- colMeans(stoch.m5)
+
+bayes.m1 <- x %>% map("imp.bayes.m1") %>% vapply(., statistics.d, format.d) %>% t()
+bayes.m1 <- colMeans(bayes.m1)
+
+bayes.m5 <- x %>% map("imp.bayes.m5") %>% vapply(., statistics.d, format.d) %>% t()
+bayes.m5 <- colMeans(bayes.m5)
+
+pmm.m1 <- x %>% map("imp.pmm.m1") %>% vapply(., statistics.d, format.d) %>% t()
+pmm.m1 <- colMeans(pmm.m1)
+
+pmm.m5 <- x %>% map("imp.pmm.m5") %>% vapply(., statistics.d, format.d) %>% t()
+pmm.m5 <- colMeans(pmm.m5)
+
+  return(rbind(data, mean, reg, stoch.m1, stoch.m5, bayes.m1, bayes.m5, pmm.m1, pmm.m5))
+}
+
+
+final_result_d10 <- statistics_summary_d(result.p10) 
+final_result_d25 <- statistics_summary_d(result.p25) 
+final_result_d50 <- statistics_summary_d(result.p50) 
+
+
+```
+
+

@@ -1,0 +1,176 @@
+---
+title: "4. Results"
+author: "Boy Remmelzwaal"
+date: "7/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+## Function: Descriptives (true values)
+```{r}
+
+
+true.estimates.d <- function(x) {
+   
+   # Y - BMI
+   y.mean <- mean(x$BMI)
+   y.se <- sd(x$BMI) %>% "/"(sqrt(nrow(x)))
+   y.interval <- qt(.975, (sqrt(nrow(x)) - 1)) * y.se
+   y.lower <- y.mean - y.interval
+   y.upper <- y.mean + y.interval
+   y.aw <- 0
+   y.rmse <- TRUE
+   y.coverage <- 0
+   y.bias <- 0
+   
+   # X1  variable - BMI
+   x1.mean <- mean(x$Glucose)
+   x1.se <- sd(x$Glucose) %>% "/"(sqrt(nrow(x)))
+   x1.interval <- qt(.975, (sqrt(nrow(x)) - 1)) * y.se
+   x1.lower <- y.mean - y.interval
+   x1.upper <- y.mean + y.interval
+   x1.aw <- 0
+   x1.rmse <- TRUE
+   x1.coverage <- 0
+   x1.bias <- 0
+
+   # X2 variable - BMI
+   x2.mean <- mean(x$BloodPressure)
+   x2.se <- sd(x$BloodPressure) %>% "/"(sqrt(nrow(x)))
+   x2.interval <- qt(.975, (sqrt(nrow(x)) - 1)) * y.se
+   x2.lower <- y.mean - y.interval
+   x2.upper <- y.mean + y.interval
+   x2.aw <- 0
+   x2.rmse <- TRUE
+   x2.coverage <- 0
+   x2.bias <- 0
+
+    # X3 variable - BMI
+   x3.mean <- mean(x$SkinThickness)
+   x3.se <- sd(x$SkinThickness) %>% "/"(sqrt(nrow(x)))
+   x3.interval <- qt(.975, (sqrt(nrow(x)) - 1)) * y.se
+   x3.lower <- y.mean - y.interval
+   x3.upper <- y.mean + y.interval
+   x3.aw <- 0
+   x3.rmse <- TRUE
+   x3.coverage <- 0
+   x3.bias <- 0
+
+   # X4 variable - BMI
+   x4.mean <- mean(x$Insulin)
+   x4.se <- sd(x$Insulin) %>% "/"(sqrt(nrow(x)))
+   x4.interval <- qt(.975, (sqrt(nrow(x)) - 1)) * y.se
+   x4.lower <- y.mean - y.interval
+   x4.upper <- y.mean + y.interval
+   x4.aw <- 0
+   x4.rmse <- TRUE
+   x4.coverage <- 0
+   x4.bias <- 0
+   
+  return(c(y.mean, y.se, y.aw, y.rmse, y.coverage, y.bias,
+           x1.mean, x1.se, x1.aw, x1.rmse, x1.coverage, x1.bias,
+           x2.mean, x2.se, x2.aw, x2.rmse, x2.coverage, x2.bias,
+           x3.mean, x3.se, x3.aw, x3.rmse, x3.coverage, x3.bias,
+           x4.mean, x4.se, x4.aw, x4.rmse, x4.coverage, x4.bias))
+}
+
+format.d<- (c("y.mean" = 0," y.se" = 0, "y.aw" = 0,  "y.coverage" = 0, "y.bias" = 0,
+           "x1.mean" = 0, "x1.se" = 0, "x1.aw" = 0,  "x1.coverage" = 0," x1.bias" = 0,
+           "x2.mean" = 0, "x2.se" = 0, "x2.aw" = 0,  "x2.coverage" = 0," x2.bias" = 0,
+           "x3.mean" = 0, "x3.se" = 0, "x3.aw" = 0,  "x3.coverage" = 0," x3.bias" = 0,
+           "x4.mean" = 0, "x4.se" = 0, "x4.aw" = 0,  "x4.coverage" = 0," x4.bias" = 0))
+
+```
+
+
+## Function: Descriptives (imputations)
+```{r}
+
+
+statistics.d <- function(x) {
+   
+   truedata <- get("data", envir = .GlobalEnv)
+   mids <- complete(x, action = "all")
+ 
+   # True values
+   y.true <- truedata$BMI %>% mean()
+   x1.true <- truedata$Glucose %>% mean()
+   x2.true <- truedata$BloodPressure %>% mean()
+   x3.true <- truedata$SkinThickness %>% mean()
+   x4.true <- truedata$Insulin %>% mean()
+     
+   #Mean
+   y.mean <- mids %>% map_df(~mean(.$BMI)) %>% t() %>% mean()
+   x1.mean <- mids %>% map_df(~mean(.$Glucose)) %>% t() %>% mean()
+   x2.mean <- mids %>% map_df(~mean(.$BloodPressure)) %>% t() %>% mean()
+   x3.mean <- mids %>% map_df(~mean(.$SkinThickness)) %>% t() %>% mean()
+   x4.mean <- mids %>% map_df(~mean(.$Insulin)) %>% t() %>% mean()
+   
+   #SE
+   y.se <-  mids %>% map_df(~sd(.$BMI)) %>% t() %>% "/"(sqrt(nrow(mids[[1]]))) %>% mean()
+   x1.se <-  mids %>% map_df(~sd(.$Glucose)) %>% t() %>% "/"(sqrt(nrow(mids[[1]]))) %>% mean()
+   x2.se <-  mids %>% map_df(~sd(.$BloodPressure)) %>% t() %>% "/"(sqrt(nrow(mids[[1]]))) %>% mean()
+   x3.se <-  mids %>% map_df(~sd(.$SkinThickness)) %>% t() %>% "/"(sqrt(nrow(mids[[1]]))) %>% mean()
+   x4.se <-  mids %>% map_df(~sd(.$Insulin)) %>% t() %>% "/"(sqrt(nrow(mids[[1]]))) %>% mean()
+   
+   #Interval
+   y.interval <- qt(.975, (nrow(mids[[1]]) - 1)) * y.se
+   x1.interval <- qt(.975, (nrow(mids[[1]]) - 1)) * x1.se
+   x2.interval <- qt(.975, (nrow(mids[[1]]) - 1)) * x2.se
+   x3.interval <- qt(.975, (nrow(mids[[1]]) - 1)) * x3.se
+   x4.interval <- qt(.975, (nrow(mids[[1]]) - 1)) * x4.se
+   
+   #lower
+   y.lower <- y.mean - y.interval
+   x1.lower <- x1.mean - x1.interval
+   x2.lower <- x2.mean - x2.interval
+   x3.lower <- x3.mean - x3.interval
+   x4.lower <- x4.mean - x4.interval
+   
+   #upper
+   y.upper  <- y.mean  +  y.interval
+   x1.upper <- x1.mean + x1.interval
+   x2.upper <- x2.mean + x2.interval
+   x3.upper <- x3.mean + x3.interval
+   x4.upper <- x4.mean + x4.interval   
+   
+   #aw
+   y.aw <- y.upper - y.lower
+   x1.aw <- x1.upper - x1.lower
+   x2.aw <- x2.upper - x2.lower
+   x3.aw <- x3.upper - x3.lower
+   x4.aw <- x4.upper - x4.lower
+   
+   #Bias
+   y.bias <- y.mean - y.true
+   x1.bias <- x1.mean - x1.true
+   x2.bias <- x2.mean - x2.true
+   x3.bias <- x3.mean - x3.true
+   x4.bias <- x4.mean - x4.true
+   
+   # Coverage rate
+   y.coverage <- y.lower < y.true & y.true < y.upper
+   x1.coverage <- x1.lower < x1.true & x1.true < x1.upper   
+   x2.coverage <- x2.lower < x2.true & x2.true < x2.upper
+   x3.coverage <- x3.lower < x3.true & x3.true < x3.upper
+   x4.coverage <- x4.lower < x4.true & x4.true < x4.upper
+   
+   
+  return(c(y.mean, y.se, y.aw, y.coverage, y.bias,
+           x1.mean, x1.se, x1.aw, x1.coverage, x1.bias,
+           x2.mean, x2.se, x2.aw, x2.coverage, x2.bias,
+           x3.mean, x3.se, x3.aw, x3.coverage, x3.bias,
+           x4.mean, x4.se, x4.aw, x4.coverage, x4.bias))
+}
+
+
+
+```
+
+
